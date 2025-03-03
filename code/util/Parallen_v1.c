@@ -3,8 +3,35 @@
 #include <math.h>
 #include <omp.h>
 
-#define N 50  // Minimum matrix size (can be changed to larger)
+#define N 10  // Change this to your required matrix size
 
+void read_matrix_from_file(const char *filename, double **A, double *b, int n) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        exit(EXIT_FAILURE);
+    }
+
+    // Skip the first line (comment)
+    char buffer[256];
+    fgets(buffer, sizeof(buffer), file);
+
+    // Read matrix A
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            fscanf(file, "%lf", &A[i][j]);
+        }
+    }
+
+    // Read vector b
+    for (int i = 0; i < n; i++) {
+        fscanf(file, "%lf", &b[i]);
+    }
+
+    fclose(file);
+}
+
+// Allocate memory for an n x n matrix
 double **allocate_matrix(int n) {
     double **A = (double **)malloc(n * sizeof(double *));
     for (int i = 0; i < n; i++) {
@@ -13,6 +40,7 @@ double **allocate_matrix(int n) {
     return A;
 }
 
+// Free allocated memory for matrix A
 void free_matrix(double **A, int n) {
     for (int i = 0; i < n; i++) {
         free(A[i]);
@@ -20,7 +48,7 @@ void free_matrix(double **A, int n) {
     free(A);
 }
 
-// Print the matrix (for debugging)
+// Print matrix for debugging
 void print_matrix(double **A, int n) {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -30,14 +58,14 @@ void print_matrix(double **A, int n) {
     }
 }
 
-// OpenMP Parallel LU Decomposition with Partial Pivoting
+// LU Decomposition with Partial Pivoting (No explicit singularity check)
 void lu_decomposition(double **A, int n, int *P) {
     for (int i = 0; i < n; i++) {
-        P[i] = i;
+        P[i] = i;  // Initialize permutation vector
     }
 
     for (int i = 0; i < n; i++) {
-        // Pivoting (Find the row with the max absolute value in column i)
+        // **Pivoting: Find the row with the maximum absolute value in column i**
         int pivot = i;
         for (int j = i + 1; j < n; j++) {
             if (fabs(A[j][i]) > fabs(A[pivot][i])) {
@@ -45,23 +73,23 @@ void lu_decomposition(double **A, int n, int *P) {
             }
         }
 
-        // Swap rows in A and P
+        // **Swap rows in A and update permutation array P**
         if (pivot != i) {
             double *temp = A[i];
             A[i] = A[pivot];
             A[pivot] = temp;
 
-            int tmp = P[i];
+            int temp_idx = P[i];
             P[i] = P[pivot];
-            P[pivot] = tmp;
+            P[pivot] = temp_idx;
         }
 
-        // LU Factorization using OpenMP
+        // **LU Factorization using OpenMP for parallel computation**
         #pragma omp parallel for
         for (int j = i + 1; j < n; j++) {
-            A[j][i] /= A[i][i]; // Compute L
+            A[j][i] /= A[i][i];  // Compute L (lower triangular matrix)
             for (int k = i + 1; k < n; k++) {
-                A[j][k] -= A[j][i] * A[i][k]; // Compute U
+                A[j][k] -= A[j][i] * A[i][k];  // Compute U (upper triangular matrix)
             }
         }
     }
@@ -70,15 +98,11 @@ void lu_decomposition(double **A, int n, int *P) {
 int main() {
     int n = N;  // Set matrix size
     double **A = allocate_matrix(n);
+    double *b = (double *)malloc(n * sizeof(double));
     int *P = (int *)malloc(n * sizeof(int));
 
-    // Fill matrix with random values
-    srand(42);  // Fixed seed for reproducibility
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-            A[i][j] = rand() % 100 + 1;  // Random values from 1 to 100
-        }
-    }
+    // Read matrix A and vector b from file
+    read_matrix_from_file("system.txt", A, b, n);
 
     printf("Original Matrix:\n");
     print_matrix(A, n);
